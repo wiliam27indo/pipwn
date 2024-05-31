@@ -1,7 +1,6 @@
 #!/bin/bash
 
-if [ -z $1 ] ;then
-sudo apt install pppoe dnsmasq iptables nginx php-fpm nmap at -y
+sudo apt install pppoe dnsmasq iptables nginx php-fpm nmap -y
 echo 'bogus-priv
 expand-hosts
 domain-needed
@@ -63,8 +62,27 @@ echo 'ACTION=="add", KERNEL=="sd*", SUBSYSTEMS=="usb|scsi", DRIVERS=="sd", SYMLI
 ACTION=="remove", SUBSYSTEM=="block", RUN+="/boot/firmware/PPPwn/pwnumount.sh $kernel"' | sudo tee /etc/udev/rules.d/99-pwnmnt.rules
 sudo udevadm control --reload
 fi
-if [ -f /media/pwndrives ]; then
-sudo mkdir /media/pwndrives
+PITYP=$(tr -d '\0' </proc/device-tree/model) 
+if [[ $PITYP == *"Raspberry Pi 4"* ]] || [[ $PITYP == *"Raspberry Pi 5"* ]] ;then
+if [ ! -f /media/PPPwn/pwndev ]; then
+sudo mkdir /media/PPPwn
+sudo dd if=/dev/zero of=/media/PPPwn/pwndev bs=4096 count=65535 
+sudo mkdosfs /media/PPPwn/pwndev -F 32  
+echo 'dtoverlay=dwc2' | sudo tee -a /boot/firmware/config.txt
+sudo mkdir /media/pwndev
+sudo mount -o loop /media/PPPwn/pwndev /media/pwndev
+sudo mkdir /media/pwndev/payloads
+sudo cp "/home/$SUDO_USER/PI-Pwn/USB Drive/goldhen.bin" /media/pwndev
+sudo umount /media/pwndev
+UDEV=$(sudo blkid | grep '^/dev/sd' | cut -f1 -d':')
+if [[ $UDEV == *"dev/sd"* ]] ;then
+sudo mount -o loop $UDEV /media/pwndev
+sudo mkdir /media/pwndev/payloads
+sudo cp "/home/$SUDO_USER/PI-Pwn/USB Drive/goldhen.bin" /media/pwndev
+sudo umount /media/pwndev 
+fi
+sudo rm -f -r /media/pwndev
+fi
 fi
 PPSTAT=$(sudo systemctl list-unit-files --state=enabled --type=service|grep pppoe) 
 if [[ ! $PPSTAT == "" ]] ; then
@@ -73,9 +91,6 @@ fi
 if [ ! -f /boot/firmware/PPPwn/ports.txt ]; then
 echo '2121,3232,9090,8080,12800,1337' | sudo tee /boot/firmware/PPPwn/ports.txt
 fi
-sudo sed -i 's^"exit 0"^"exit"^g' /etc/rc.local
-sudo sed -i 's^sudo bash /boot/firmware/PPPwn/devboot.sh \&^^g' /etc/rc.local
-sudo sed -i 's^exit 0^sudo bash /boot/firmware/PPPwn/devboot.sh \&\n\nexit 0^g' /etc/rc.local
 if [ -f /boot/firmware/PPPwn/config.sh ]; then
 while true; do
 read -p "$(printf '\r\n\r\n\033[36mConfig found, Do you want to change the stored settings\033[36m(Y|N)?: \033[0m')" cppp
@@ -93,7 +108,25 @@ esac
 done
 fi
 while true; do
-read -p "$(printf '\r\n\r\n\033[36mDo you want to change the PPPoE username and password?\r\nif you select no then these defaults will be used\r\n\r\nUsername: \033[33mppp\r\n\033[36mPassword: \033[33mppp\r\n\r\n\033[36m(Y|N)?: \033[0m')" wapset
+read -p "$(printf '\r\n\r\n\033[36mDo you want to detect console shutdown and restart PPPwn\r\n\r\n\033[36m(Y|N)?: \033[0m')" dlnk
+case $dlnk in
+[Yy]* ) 
+DTLNK="true"
+echo -e '\033[32mDetect shutdown enabled\033[0m'
+break;;
+[Nn]* ) 
+echo -e '\033[35mDetect shutdown disabled\033[0m'
+DTLNK="false"
+break;;
+* ) echo -e '\033[31mPlease answer Y or N\033[0m';;
+esac
+done
+while true; do
+read -p "$(printf '\r\n\r\n\033[36mDo you want the console to connect to the internet after PPPwn? (Y|N):\033[0m ')" pppq
+case $pppq in
+[Yy]* ) 
+while true; do
+read -p "$(printf '\r\n\r\n\033[36mDo you want to set a PPPoE username and password?\r\nif you select no then these defaults will be used\r\n\r\nUsername: \033[33mppp\r\n\033[36mPassword: \033[33mppp\r\n\r\n\033[36m(Y|N)?: \033[0m')" wapset
 case $wapset in
 [Yy]* ) 
 while true; do
@@ -137,30 +170,12 @@ break;;
 esac
 done
 echo '"'$PPPU'"  *  "'$PPPW'"  192.168.2.2' | sudo tee /etc/ppp/pap-secrets
-while true; do
-read -p "$(printf '\r\n\r\n\033[36mDo you want to detect console shutdown and restart PPPwn\r\n\r\n\033[36m(Y|N)?: \033[0m')" dlnk
-case $dlnk in
-[Yy]* ) 
-DTLNK="true"
-echo -e '\033[32mDetect shutdown enabled\033[0m'
-break;;
-[Nn]* ) 
-echo -e '\033[35mDetect shutdown disabled\033[0m'
-DTLNK="false"
-break;;
-* ) echo -e '\033[31mPlease answer Y or N\033[0m';;
-esac
-done
-while true; do
-read -p "$(printf '\r\n\r\n\033[36mDo you want the console to connect to the internet after PPPwn? (Y|N):\033[0m ')" pppq
-case $pppq in
-[Yy]* ) 
 INET="true"
 SHTDN="false"
-echo -e '\033[32mConsole internet access enabled\033[0m'
+echo -e '\033[32mPPPoE installed\033[0m'
 break;;
 [Nn]* ) 
-echo -e '\033[35mConsole internet access disabled\033[0m'
+echo -e '\033[35mSkipping PPPoE install\033[0m'
 INET="false"
 while true; do
 read -p "$(printf '\r\n\r\n\033[36mDo you want the pi to shutdown after pwn success\r\n\r\n\033[36m(Y|N)?: \033[0m')" pisht
@@ -195,14 +210,14 @@ break;;
 esac
 done
 while true; do
-read -p "$(printf '\r\n\r\n\033[36mDo you want to try and detect if goldhen is running and skip running pppwn if found, useful for rest mode\r\n\r\n\033[36m(Y|N)?: \033[0m')" restmd
+read -p "$(printf '\r\n\r\n\033[36mDo you want to enable rest mode support\r\n\r\n\033[36m(Y|N)?: \033[0m')" restmd
 case $restmd in
 [Yy]* ) 
 RESTM="true"
-echo -e '\033[32mGoldhen detection enabled\033[0m'
+echo -e '\033[32mRest mode support enabled\033[0m'
 break;;
 [Nn]* ) 
-echo -e '\033[35mGoldhen detection disabled\033[0m'
+echo -e '\033[35mRest mode support disabled\033[0m'
 RESTM="false"
 break;;
 * ) echo -e '\033[31mPlease answer Y or N\033[0m';;
@@ -257,15 +272,15 @@ read -p "$(printf '\r\n\r\n\033[36mWould you like to change the firmware version
 case $fwset in
 [Yy]* ) 
 while true; do
-read -p  "$(printf '\033[33mEnter the firmware version [ 11.00 | 10.00 | 10.01 | 9.00 ]: \033[0m')" FWV
+read -p  "$(printf '\033[33mEnter the firmware version [11.00 | 9.00]: \033[0m')" FWV
 case $FWV in
 "" ) 
  echo -e '\033[31mCannot be empty!\033[0m';;
  * )  
 if grep -q '^[0-9.]*$' <<<$FWV ; then 
 
-if [[ ! "$FWV" =~ ^("11.00"|"10.00"|"10.01"|"9.00")$ ]]  ; then
-echo -e '\033[31mThe version must be [ 11.00 | 10.00 | 10.01 | 9.00 ]\033[0m';
+if [[ ! "$FWV" =~ ^("11.00"|"9.00")$ ]]  ; then
+echo -e '\033[31mThe version must be 11.00 or 9.00\033[0m';
 else 
 break;
 fi
@@ -314,20 +329,16 @@ break;;
 * ) echo -e '\033[31mPlease answer Y or N\033[0m';;
 esac
 done
-PITYP=$(tr -d '\0' </proc/device-tree/model) 
 if [[ $PITYP == *"Raspberry Pi 4"* ]] || [[ $PITYP == *"Raspberry Pi 5"* ]] ;then
 while true; do
 read -p "$(printf '\r\n\r\n\033[36mDo you want the pi to act as a flash drive to the console\r\n\r\n\033[36m(Y|N)?: \033[0m')" vusb
 case $vusb in
 [Yy]* ) 
-echo -e '\033[32mThe pi will mount as a drive\n\033[33mYou must plug the pi into the console usb port using the \033[35musb-c\033[33m of the pi and the usb drive in the pi must contain a folder named \033[35mpayloads\033[0m'
-sudo sed -i "s^dtoverlay=dwc2^^g" /boot/firmware/config.txt
-echo 'dtoverlay=dwc2' | sudo tee -a /boot/firmware/config.txt
+echo -e '\033[32mThe pi will mount as a drive and goldhen.bin has been placed in the drive\n\033[33mYou must plug the pi into the console usb port using the usb-c of the pi\033[0m'
 VUSB="true"
 break;;
 [Nn]* ) 
 echo -e '\033[35mThe pi will not mount as a drive\033[0m'
-sudo sed -i "s^dtoverlay=dwc2^^g" /boot/firmware/config.txt
 VUSB="false"
 break;;
 * ) echo -e '\033[31mPlease answer Y or N\033[0m';;
@@ -394,6 +405,7 @@ DTLINK='$DTLNK'
 RESTMODE='$RESTM'
 PPDBG='$PDBG'
 TIMEOUT="'$TOUT'm"' | sudo tee /boot/firmware/PPPwn/config.sh
+sudo rm -f /usr/lib/systemd/system/bluetooth.target
 sudo rm -f /usr/lib/systemd/system/network-online.target
 sudo sed -i 's^sudo bash /boot/firmware/PPPwn/run.sh \&^^g' /etc/rc.local
 echo '[Service]
@@ -414,8 +426,3 @@ sudo sed -i "s^$CHSTN^$HSTN^g" /etc/hosts
 sudo sed -i "s^$CHSTN^$HSTN^g" /etc/hostname
 echo -e '\033[36mInstall complete,\033[33m Rebooting\033[0m'
 sudo reboot
-else
-echo "Update complete, Rebooting."  | sudo tee /dev/tty1 | sudo tee /dev/pts/* | sudo tee -a /boot/firmware/PPPwn/pwn.log
-coproc read -t 6 && wait "$!" || true
-sudo reboot
-fi

@@ -1,8 +1,5 @@
 <?php 
 
-$firmwares = array("11.00", "10.00", "10.01", "9.00");
-
-
 if (isset($_POST['save'])){
 	$config = "#!/bin/bash\n";
 	$config .= "INTERFACE=\\\"".str_replace(" ", "", trim($_POST["interface"]))."\\\"\n";
@@ -82,7 +79,6 @@ if (isset($_POST['payloads'])){
 if (isset($_POST['remount'])){
    exec('sudo bash /boot/firmware/PPPwn/remount.sh &');
 }
-
 
 $cmd = 'sudo cat /boot/firmware/PPPwn/config.sh';
 exec($cmd ." 2>&1", $data, $ret);
@@ -357,17 +353,17 @@ label[id=pwnlog]:focus {
 <script>
 var fid;
 
-function startLog(lf) {
-   fid = setInterval(updateLog, 2000, lf);
+function startLog() {
+   fid = setInterval(updateLog, 2000);
 }
 
 function stopLog() {
   clearInterval(fid);
 }
 
-function updateLog(f) {
+function updateLog() {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/' + f);
+    xhr.open('GET', '/pwn.log');
 	xhr.setRequestHeader('Cache-Control', 'no-cache');
 	xhr.responseType = \"text\";
 	xhr.send();
@@ -406,22 +402,14 @@ function setEnd() {
 <form method=\"post\"><button name=\"payloads\">Load Payloads</button> &nbsp; ");
 
 
-
 $cmd = 'sudo tr -d \'\0\' </proc/device-tree/model';
 exec($cmd ." 2>&1", $pidata, $ret);
-if (str_starts_with(trim(implode($pidata)),  "Raspberry Pi 4") || str_starts_with(trim(implode($pidata)), "Raspberry Pi 5"))
-{
-$cmd = 'sudo cat /boot/firmware/config.txt | grep "dtoverlay=dwc2"';
-exec($cmd ." 2>&1", $dwcdata, $ret);
-$dwcval = trim(implode($dwcdata)); 
-if ($vmusb == "true" && ! empty($dwcval))
+if ($vmusb == "true" && str_starts_with(trim(implode($pidata)),  "Raspberry Pi 4") || str_starts_with(trim(implode($pidata)), "Raspberry Pi 5"))
 {
 print("<button name=\"remount\">Remount USB</button> &nbsp; ");
 }
-}
 
-
-print("<button name=\"restart\">Restart PPPwn</button> &nbsp; <button name=\"reboot\">Reboot PI</button> &nbsp; <button name=\"shutdown\">Shutdown PI</button> &nbsp; <button name=\"update\">Update</button>
+print("<button name=\"restart\">Restart PPPwn</button> &nbsp; <button name=\"reboot\">Reboot PI</button> &nbsp; <button name=\"shutdown\">Shutdown PI</button>
 </form>
 </center>
 <br>");
@@ -444,16 +432,17 @@ print("<option value=\"".$x."\">".$x."</option>");
 print("</select><label for=\"interface\">&nbsp; Interface</label><br><br>");
 
 
-
 print("<select name=\"firmware\">");
-foreach ($firmwares as $fw) {
-if ($firmware == $fw)
+
+if ($firmware == "11.00")
 {
-	print("<option value=\"".$fw."\" selected>".$fw."</option>");
+print("<option value=\"11.00\" selected>11.00</option>
+<option value=\"9.00\">9.00</option>");
 }else{
-	print("<option value=\"".$fw."\">".$fw."</option>");
+print("<option value=\"11.00\">11.00</option>
+<option value=\"9.00\" selected>9.00</option>");
 }
-}
+
 print("</select><label for=\"firmware\">&nbsp; Firmware version</label><br><br>");
 
 
@@ -489,7 +478,7 @@ if ($restmode == "true")
 $cval = "checked";
 }
 print("<br><input type=\"checkbox\" name=\"restmode\" value=\"".$restmode."\" ".$cval.">
-<label for=\"restmode\">&nbsp;Detect if goldhen is running<label style=\"font-size:12px; padding:4px;\">(useful for rest mode)</label></label>
+<label for=\"restmode\">&nbsp;Enable rest mode support</label>
 <br>");
 
 
@@ -557,8 +546,6 @@ print("<input type=\"hidden\" name=\"shutdownpi\" value=\"".$shutdownpi."\">");
 
 if (str_starts_with(trim(implode($pidata)),  "Raspberry Pi 4") || str_starts_with(trim(implode($pidata)), "Raspberry Pi 5"))
 {
-if (! empty($dwcval))	
-{	
 $cval = "";
 if ($vmusb == "true")
 {
@@ -566,7 +553,6 @@ $cval = "checked";
 }
 print("<br><input type=\"checkbox\" name=\"vmusb\" value=\"".$vmusb."\" ".$cval.">
 <label for=\"vmusb\">&nbsp;Enable usb drive to console</label>");
-}
 }
 
 
@@ -589,7 +575,7 @@ var span = document.getElementsByClassName(\"close\")[0];
 
 btn.onclick = function() {
   logger.style.display = \"block\";
-  startLog('pwn.log');
+  startLog();
 }
 
 span.onclick = function() {
@@ -603,15 +589,7 @@ window.onclick = function(event) {
 	stopLog();
   }
 }
-");
-
-if (isset($_POST['update'])){
-	exec('sudo bash /boot/firmware/PPPwn/update.sh >> /dev/null &');
-    print("logger.style.display = \"block\";
-    startLog('upd.log');");
-}
-
-print("</script>
+</script>
 </body>
 </html>");
 
