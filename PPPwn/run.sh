@@ -1,20 +1,19 @@
 #!/bin/bash
 
-if [ -f /boot/firmware/PPPwn/config.sh ]; then
+if [ ! -f /boot/firmware/PPPwn/config.sh ]; then
+INTERFACE="eth0" 
+FIRMWAREVERSION="11.00" 
+SHUTDOWN=true
+USBETHERNET=false
+PPPOECONN=false
+USECPP=true
+VMUSB=false
+else
 source /boot/firmware/PPPwn/config.sh
 fi
-if [ -z $INTERFACE ]; then INTERFACE="eth0"; fi
-if [ -z $FIRMWAREVERSION ]; then FIRMWAREVERSION="11.00"; fi
-if [ -z $SHUTDOWN ]; then SHUTDOWN=true; fi
-if [ -z $USBETHERNET ]; then USBETHERNET=false; fi
-if [ -z $PPPOECONN ]; then PPPOECONN=false; fi
-if [ -z $VMUSB ]; then VMUSB=false; fi
-if [ -z $DTLINK ]; then DTLINK=false; fi
-if [ -z $PPDBG ]; then PPDBG=false; fi
-if [ -z $TIMEOUT ]; then TIMEOUT="5m"; fi
-if [ -z $RESTMODE ]; then RESTMODE=false; fi
-echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/unbind 
-echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/bind
+if [[ -z $USECPP ]] ;then
+USECPP=true
+fi
 PITYP=$(tr -d '\0' </proc/device-tree/model) 
 if [[ $PITYP == *"Raspberry Pi 2"* ]] ;then
 coproc read -t 15 && wait "$!" || true
@@ -59,12 +58,11 @@ echo -e "\n\n\033[36m _____  _____  _____
 |_|    |_|    |_|      \\_/\\_/ |_| |_|\033[0m
 \n\033[33mhttps://github.com/TheOfficialFloW/PPPwn\033[0m\n" | sudo tee /dev/tty1
 sudo systemctl stop pppoe
-sudo systemctl stop dtlink
 if [ $USBETHERNET = true ] ; then
 	echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/unbind
 	coproc read -t 2 && wait "$!" || true
 	echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/bind
-	coproc read -t 3 && wait "$!" || true
+	coproc read -t 5 && wait "$!" || true
 	sudo ip link set $INTERFACE up
    else	
 	sudo ip link set $INTERFACE down
@@ -72,7 +70,11 @@ if [ $USBETHERNET = true ] ; then
 	sudo ip link set $INTERFACE up
 fi
 echo -e "\n\033[36m$PITYP\033[92m\nFirmware:\033[93m $FIRMWAREVERSION\033[92m\nInterface:\033[93m $INTERFACE\033[0m" | sudo tee /dev/tty1
-echo -e "\033[92mPPPwn:\033[93m C++ $CPPBIN \033[0m" | sudo tee /dev/tty1
+if [ $USECPP = true ] ; then
+   echo -e "\033[92mPPPwn:\033[93m C++ $CPPBIN \033[0m" | sudo tee /dev/tty1
+else
+   echo -e "\033[92mPPPwn:\033[93m Python pppwn.py \033[0m" | sudo tee /dev/tty1
+fi
 if [ $VMUSB = true ] ; then
    UDEV=$(sudo blkid | grep '^/dev/sd' | cut -f1 -d':')
    if [[ -z $UDEV ]] ;then
@@ -88,9 +90,6 @@ if [ $PPPOECONN = true ] ; then
 else   
    echo -e "\033[92mInternet Access:\033[93m Disabled\033[0m" | sudo tee /dev/tty1
 fi
-if [ -f /boot/firmware/PPPwn/pwn.log ]; then
-   sudo rm -f /boot/firmware/PPPwn/pwn.log
-fi
 if [[ ! $(ethtool $INTERFACE) == *"Link detected: yes"* ]]; then
    echo -e "\033[31mWaiting for link\033[0m" | sudo tee /dev/tty1
    while [[ ! $(ethtool $INTERFACE) == *"Link detected: yes"* ]]
@@ -99,52 +98,6 @@ if [[ ! $(ethtool $INTERFACE) == *"Link detected: yes"* ]]; then
    done
    echo -e "\033[32mLink found\033[0m\n" | sudo tee /dev/tty1
 fi
-if [ $RESTMODE = true ] ; then
-sudo pppoe-server -I $INTERFACE -T 60 -N 1 -C PPPWN -S PPPWN -L 192.168.2.1 -R 192.168.2.2 
-coproc read -t 2 && wait "$!" || true
-while [[ ! $(sudo nmap -p 3232 192.168.2.2 | grep '3232/tcp' | cut -f2 -d' ') == "" ]]
-do
-    coproc read -t 2 && wait "$!" || true
-done
-coproc read -t 5 && wait "$!" || true
-GHT=$(sudo nmap -p 3232 192.168.2.2 | grep '3232/tcp' | cut -f2 -d' ')
-if [[ $GHT == *"open"* ]] ; then
-echo -e "\n\033[95mGoldhen found aborting pppwn\033[0m\n" | sudo tee /dev/tty1
-sudo killall pppoe-server
-if [ $PPPOECONN = true ] ; then
-	sudo systemctl start pppoe
-	if [ $DTLINK = true ] ; then
-		sudo systemctl start dtlink
-	fi
-else
-	if [ $SHUTDOWN = true ] ; then
-		coproc read -t 5 && wait "$!" || true
-		sudo poweroff
-	else
-		if [ $DTLINK = true ] ; then
-			sudo systemctl start dtlink
-		else
-			sudo ip link set $INTERFACE down
-		fi
-	fi
-fi
-exit 0
-else
-echo -e "\n\033[95mGoldhen not found starting pppwn\033[0m\n" | sudo tee /dev/tty1
-sudo killall pppoe-server
-if [ $USBETHERNET = true ] ; then
-	echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/unbind
-	coproc read -t 2 && wait "$!" || true
-	echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/bind
-	coproc read -t 3 && wait "$!" || true
-	sudo ip link set $INTERFACE up
-   else	
-	sudo ip link set $INTERFACE down
-	coproc read -t 5 && wait "$!" || true
-	sudo ip link set $INTERFACE up
-fi
-fi
-fi
 PIIP=$(hostname -I) || true
 if [ "$PIIP" ]; then
    echo -e "\n\033[92mIP: \033[93m $PIIP\033[0m" | sudo tee /dev/tty1
@@ -152,47 +105,47 @@ fi
 echo -e "\n\033[95mReady for console connection\033[0m\n" | sudo tee /dev/tty1
 while [ true ]
 do
-if [ -f /boot/firmware/PPPwn/config.sh ]; then
- if  grep -Fxq "PPDBG=true" /boot/firmware/PPPwn/config.sh ; then
-   PPDBG=true
-   else
-   PPDBG=false
- fi
+if [ $USECPP = true ] ; then
+   ret=$(sudo /boot/firmware/PPPwn/$CPPBIN --interface "$INTERFACE" --fw "${FIRMWAREVERSION//.}" --stage1 "/boot/firmware/PPPwn/stage1_$FIRMWAREVERSION.bin" --stage2 "/boot/firmware/PPPwn/stage2_$FIRMWAREVERSION.bin")
+else
+   ret=$(sudo python3 /boot/firmware/PPPwn/pppwn.py --interface=$INTERFACE --fw=$FIRMWAREVERSION --stage1=/boot/firmware/PPPwn/stage1_$FIRMWAREVERSION.bin --stage2=/boot/firmware/PPPwn/stage2_$FIRMWAREVERSION.bin)
 fi
-while read -r stdo ; 
-do 
- if [ $PPDBG = true ] ; then
-	echo -e $stdo | sudo tee /dev/tty1 | sudo tee /dev/pts/* | sudo tee -a /boot/firmware/PPPwn/pwn.log
- fi
- if [[ $stdo  == "[+] Done!" ]] ; then
-	echo -e "\033[32m\nConsole PPPwned! \033[0m\n" | sudo tee /dev/tty1
-	if [ $PPPOECONN = true ] ; then
-		sudo systemctl start pppoe
-		if [ $DTLINK = true ] ; then
-			sudo systemctl start dtlink
-		fi
-	else
-		if [ $SHUTDOWN = true ] ; then
-			coproc read -t 5 && wait "$!" || true
-			sudo poweroff
+if [ $ret -ge 1 ]
+   then
+        echo -e "\033[32m\nConsole PPPwned! \033[0m\n" | sudo tee /dev/tty1
+		if [ $PPPOECONN = true ] ; then
+		    if [ $USBETHERNET = true ] ; then
+		     echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/unbind
+        	 coproc read -t 3 && wait "$!" || true
+        	 echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/bind
+		    else	
+        	 sudo ip link set $INTERFACE down
+        	 coproc read -t 3 && wait "$!" || true
+        	 sudo ip link set $INTERFACE up
+		    fi
+			coproc read -t 3 && wait "$!" || true
+			sudo systemctl start pppoe
 		else
-			if [ $DTLINK = true ] ; then
-				sudo systemctl start dtlink
+        	if [ $SHUTDOWN = true ] ; then
+        	 coproc read -t 5 && wait "$!" || true
+        	 sudo poweroff
 			else
-				sudo ip link set $INTERFACE down
-			fi
+			 sudo ip link set $INTERFACE down
+        	fi
+		fi
+        exit 1
+   else
+        echo -e "\033[31m\nFailed retrying...\033[0m\n" | sudo tee /dev/tty1
+		if [ $USBETHERNET = true ] ; then
+		  if [[ ! $UDEV == *"dev/sd"* ]] ;then
+        	echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/unbind
+        	coproc read -t 4 && wait "$!" || true
+        	echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/bind
+		  fi	
+           else	
+        	sudo ip link set $INTERFACE down
+        	coproc read -t 4 && wait "$!" || true
+        	sudo ip link set $INTERFACE up
         fi
-	fi
-	exit 0
- elif [[ $stdo  == *"Scanning for corrupted object...failed"* ]] ; then
- 	echo -e "\033[31m\nFailed retrying...\033[0m\n" | sudo tee /dev/tty1
- elif [[ $stdo  == *"Unsupported firmware version"* ]] ; then
- 	echo -e "\033[31m\nUnsupported firmware version\033[0m\n" | sudo tee /dev/tty1
- 	exit 1
- elif [[ $stdo  == *"Cannot find interface with name of"* ]] ; then
- 	echo -e "\033[31m\nInterface $INTERFACE not found\033[0m\n" | sudo tee /dev/tty1
- 	exit 1
- fi
-done < <(timeout $TIMEOUT sudo /boot/firmware/PPPwn/$CPPBIN --interface "$INTERFACE" --fw "${FIRMWAREVERSION//.}" --stage1 "/boot/firmware/PPPwn/stage1_$FIRMWAREVERSION.bin" --stage2 "/boot/firmware/PPPwn/stage2_$FIRMWAREVERSION.bin")
-coproc read -t 1 && wait "$!" || true
+fi
 done

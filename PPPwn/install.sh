@@ -1,6 +1,6 @@
 #!/bin/bash
 
-sudo apt install pppoe dnsmasq iptables nginx php-fpm nmap -y
+sudo apt install pppoe dnsmasq iptables nginx php-fpm python3 python3-scapy -y
 echo 'bogus-priv
 expand-hosts
 domain-needed
@@ -8,6 +8,23 @@ server=8.8.8.8
 listen-address=127.0.0.1
 port=5353
 conf-file=/etc/dnsmasq.more.conf' | sudo tee /etc/dnsmasq.conf
+echo 'address=/playstation.com/127.0.0.1
+address=/playstation.net/127.0.0.1
+address=/playstation.org/127.0.0.1
+address=/akadns.net/127.0.0.1
+address=/akamai.net/127.0.0.1
+address=/akamaiedge.net/127.0.0.1
+address=/edgekey.net/127.0.0.1
+address=/edgesuite.net/127.0.0.1
+address=/llnwd.net/127.0.0.1
+address=/scea.com/127.0.0.1
+address=/sonyentertainmentnetwork.com/127.0.0.1
+address=/ribob01.net/127.0.0.1
+address=/cddbp.net/127.0.0.1
+address=/nintendo.net/127.0.0.1
+address=/ea.com/127.0.0.1
+address=/pppwn.local/192.168.2.1' | sudo tee /etc/dnsmasq.more.conf
+sudo systemctl restart dnsmasq
 echo 'auth
 lcp-echo-failure 3
 lcp-echo-interval 60
@@ -28,15 +45,8 @@ Group=root
 Environment=NODE_ENV=production
 [Install]
 WantedBy=multi-user.target' | sudo tee /etc/systemd/system/pppoe.service
-echo '[Service]
-WorkingDirectory=/boot/firmware/PPPwn
-ExecStart=/boot/firmware/PPPwn/dtlink.sh
-Restart=never
-User=root
-Group=root
-Environment=NODE_ENV=production
-[Install]
-WantedBy=multi-user.target' | sudo tee /etc/systemd/system/dtlink.service
+HSTN=$(hostname | cut -f1 -d' ')
+if [[ ! $HSTN == "pppwn" ]] ;then
 PHPVER=$(sudo php -v | head -n 1 | cut -d " " -f 2 | cut -f1-2 -d".")
 echo 'server {
 	listen 80 default_server;
@@ -52,17 +62,9 @@ echo 'server {
     fastcgi_pass unix:/var/run/php/php'$PHPVER'-fpm.sock;
 	}
 }' | sudo tee /etc/nginx/sites-enabled/default
-sudo sed -i "s^www-data	ALL=(ALL) NOPASSWD: ALL^^g" /etc/sudoers
 echo 'www-data	ALL=(ALL) NOPASSWD: ALL' | sudo tee -a /etc/sudoers
 sudo /etc/init.d/nginx restart
-if [ ! -f /etc/udev/rules.d/99-pwnmnt.rules ]; then
-sudo mkdir /media/pwndrives
-echo 'MountFlags=shared' | sudo tee -a /usr/lib/systemd/system/systemd-udevd.service
-echo 'ACTION=="add", KERNEL=="sd*", SUBSYSTEMS=="usb|scsi", DRIVERS=="sd", SYMLINK+="usbdrive", RUN+="/boot/firmware/PPPwn/pwnmount.sh $kernel"
-ACTION=="remove", SUBSYSTEM=="block", RUN+="/boot/firmware/PPPwn/pwnumount.sh $kernel"' | sudo tee /etc/udev/rules.d/99-pwnmnt.rules
-sudo udevadm control --reload
 fi
-PITYP=$(tr -d '\0' </proc/device-tree/model) 
 if [[ $PITYP == *"Raspberry Pi 4"* ]] || [[ $PITYP == *"Raspberry Pi 5"* ]] ;then
 if [ ! -f /media/PPPwn/pwndev ]; then
 sudo mkdir /media/PPPwn
@@ -71,25 +73,16 @@ sudo mkdosfs /media/PPPwn/pwndev -F 32
 echo 'dtoverlay=dwc2' | sudo tee -a /boot/firmware/config.txt
 sudo mkdir /media/pwndev
 sudo mount -o loop /media/PPPwn/pwndev /media/pwndev
-sudo mkdir /media/pwndev/payloads
 sudo cp "/home/$SUDO_USER/PI-Pwn/USB Drive/goldhen.bin" /media/pwndev
 sudo umount /media/pwndev
 UDEV=$(sudo blkid | grep '^/dev/sd' | cut -f1 -d':')
 if [[ $UDEV == *"dev/sd"* ]] ;then
 sudo mount -o loop $UDEV /media/pwndev
-sudo mkdir /media/pwndev/payloads
 sudo cp "/home/$SUDO_USER/PI-Pwn/USB Drive/goldhen.bin" /media/pwndev
 sudo umount /media/pwndev 
 fi
 sudo rm -f -r /media/pwndev
 fi
-fi
-PPSTAT=$(sudo systemctl list-unit-files --state=enabled --type=service|grep pppoe) 
-if [[ ! $PPSTAT == "" ]] ; then
-sudo systemctl disable pppoe
-fi
-if [ ! -f /boot/firmware/PPPwn/ports.txt ]; then
-echo '2121,3232,9090,8080,12800,1337' | sudo tee /boot/firmware/PPPwn/ports.txt
 fi
 if [ -f /boot/firmware/PPPwn/config.sh ]; then
 while true; do
@@ -107,20 +100,6 @@ echo -e '\033[31mPlease answer Y or N\033[0m';;
 esac
 done
 fi
-while true; do
-read -p "$(printf '\r\n\r\n\033[36mDo you want to detect console shutdown and restart PPPwn\r\n\r\n\033[36m(Y|N)?: \033[0m')" dlnk
-case $dlnk in
-[Yy]* ) 
-DTLNK="true"
-echo -e '\033[32mDetect shutdown enabled\033[0m'
-break;;
-[Nn]* ) 
-echo -e '\033[35mDetect shutdown disabled\033[0m'
-DTLNK="false"
-break;;
-* ) echo -e '\033[31mPlease answer Y or N\033[0m';;
-esac
-done
 while true; do
 read -p "$(printf '\r\n\r\n\033[36mDo you want the console to connect to the internet after PPPwn? (Y|N):\033[0m ')" pppq
 case $pppq in
@@ -210,59 +189,15 @@ break;;
 esac
 done
 while true; do
-read -p "$(printf '\r\n\r\n\033[36mDo you want to enable rest mode support\r\n\r\n\033[36m(Y|N)?: \033[0m')" restmd
-case $restmd in
+read -p "$(printf '\r\n\r\n\033[36mDo you want to use the old python version of pppwn, It is much slower\r\n\r\n\033[36m(Y|N)?: \033[0m')" cppp
+case $cppp in
 [Yy]* ) 
-RESTM="true"
-echo -e '\033[32mRest mode support enabled\033[0m'
+UCPP="false"
+echo -e '\033[32mThe Python version of PPPwn is being used\033[0m'
 break;;
 [Nn]* ) 
-echo -e '\033[35mRest mode support disabled\033[0m'
-RESTM="false"
-break;;
-* ) echo -e '\033[31mPlease answer Y or N\033[0m';;
-esac
-done
-while true; do
-read -p "$(printf '\r\n\r\n\033[36mDo you want pppwn to run in verbose mode\r\n\r\n\033[36m(Y|N)?: \033[0m')" ppdbg
-case $ppdbg in
-[Yy]* ) 
-PDBG="true"
-echo -e '\033[32mPPPwn will run in verbose mode\033[0m'
-break;;
-[Nn]* ) 
-echo -e '\033[35mPPPwn will NOT run in verbose mode\033[0m'
-PDBG="false"
-break;;
-* ) echo -e '\033[31mPlease answer Y or N\033[0m';;
-esac
-done
-while true; do
-read -p "$(printf '\r\n\r\n\033[36mWould you like to change the timeout for pppwn to restart if it hangs, the default is 5 (minutes)\r\n\r\n\033[36m(Y|N)?: \033[0m')" tmout
-case $tmout in
-[Yy]* ) 
-while true; do
-read -p  "$(printf '\033[33mEnter the timeout value [1 | 2 | 3 | 4 | 5]: \033[0m')" TOUT
-case $TOUT in
-"" ) 
- echo -e '\033[31mCannot be empty!\033[0m';;
- * )  
-if grep -q '^[1-5]*$' <<<$TOUT ; then 
-if [[ ! "$TOUT" =~ ^("1"|"2"|"3"|"4"|"5")$ ]]  ; then
-echo -e '\033[31mThe value must be between 1 and 5\033[0m';
-else 
-break;
-fi
-else 
-echo -e '\033[31mThe timeout must only contain a number between 1 and 5\033[0m';
-fi
-esac
-done
-echo -e '\033[32mTimeout set to '$TOUT' (minutes)\033[0m'
-break;;
-[Nn]* ) 
-echo -e '\033[35mUsing the default setting: 5 (minutes)\033[0m'
-TOUT="5"
+echo -e '\033[35mThe C++ version of PPPwn is being used\033[0m'
+UCPP="true"
 break;;
 * ) echo -e '\033[31mPlease answer Y or N\033[0m';;
 esac
@@ -329,6 +264,7 @@ break;;
 * ) echo -e '\033[31mPlease answer Y or N\033[0m';;
 esac
 done
+PITYP=$(tr -d '\0' </proc/device-tree/model) 
 if [[ $PITYP == *"Raspberry Pi 4"* ]] || [[ $PITYP == *"Raspberry Pi 5"* ]] ;then
 while true; do
 read -p "$(printf '\r\n\r\n\033[36mDo you want the pi to act as a flash drive to the console\r\n\r\n\033[36m(Y|N)?: \033[0m')" vusb
@@ -347,64 +283,14 @@ done
 else
 VUSB="false"
 fi
-while true; do
-read -p "$(printf '\r\n\r\n\033[36mWould you like to change the hostname, the default is pppwn\r\n\r\n\033[36m(Y|N)?: \033[0m')" hstset
-case $hstset in
-[Yy]* ) 
-while true; do
-read -p  "$(printf '\033[33mEnter the hostname: \033[0m')" HSTN
-case $HSTN in
-"" ) 
- echo -e '\033[31mCannot be empty!\033[0m';;
- * )  
-if grep -q '^[0-9a-zA-Z_ -]*$' <<<$HSTN ; then 
-if [ ${#HSTN} -le 3 ]  || [ ${#HSTN} -ge 21 ] ; then
-echo -e '\033[31mThe interface must be between 4 and 21 characters long\033[0m';
-else 
-break;
-fi
-else 
-echo -e '\033[31mThe hostname must only contain alphanumeric characters\033[0m';
-fi
-esac
-done
-echo -e '\033[32mYou are using '$HSTN', to access the webserver use http://'$HSTN'.local\033[0m'
-break;;
-[Nn]* ) 
-echo -e '\033[35mUsing the default setting: pppwn\033[0m'
-HSTN="pppwn"
-break;;
-* ) echo -e '\033[31mPlease answer Y or N\033[0m';;
-esac
-done
-echo 'address=/playstation.com/127.0.0.1
-address=/playstation.net/127.0.0.1
-address=/playstation.org/127.0.0.1
-address=/akadns.net/127.0.0.1
-address=/akamai.net/127.0.0.1
-address=/akamaiedge.net/127.0.0.1
-address=/edgekey.net/127.0.0.1
-address=/edgesuite.net/127.0.0.1
-address=/llnwd.net/127.0.0.1
-address=/scea.com/127.0.0.1
-address=/sonyentertainmentnetwork.com/127.0.0.1
-address=/ribob01.net/127.0.0.1
-address=/cddbp.net/127.0.0.1
-address=/nintendo.net/127.0.0.1
-address=/ea.com/127.0.0.1
-address=/'$HSTN'.local/192.168.2.1' | sudo tee /etc/dnsmasq.more.conf
-sudo systemctl restart dnsmasq
 echo '#!/bin/bash
 INTERFACE="'$IFCE'" 
 FIRMWAREVERSION="'$FWV'" 
 SHUTDOWN='$SHTDN'
 USBETHERNET='$USBE'
+USECPP='$UCPP'
 PPPOECONN='$INET'
-VMUSB='$VUSB'
-DTLINK='$DTLNK'
-RESTMODE='$RESTM'
-PPDBG='$PDBG'
-TIMEOUT="'$TOUT'm"' | sudo tee /boot/firmware/PPPwn/config.sh
+VMUSB='$VUSB'' | sudo tee /boot/firmware/PPPwn/config.sh
 sudo rm -f /usr/lib/systemd/system/bluetooth.target
 sudo rm -f /usr/lib/systemd/system/network-online.target
 sudo sed -i 's^sudo bash /boot/firmware/PPPwn/run.sh \&^^g' /etc/rc.local
@@ -419,10 +305,11 @@ Environment=NODE_ENV=production
 WantedBy=multi-user.target' | sudo tee /etc/systemd/system/pipwn.service
 sudo chmod u+rwx /etc/systemd/system/pipwn.service
 sudo chmod u+rwx /etc/systemd/system/pppoe.service
-sudo chmod u+rwx /etc/systemd/system/dtlink.service
 sudo systemctl enable pipwn
-CHSTN=$(hostname | cut -f1 -d' ')
-sudo sed -i "s^$CHSTN^$HSTN^g" /etc/hosts
-sudo sed -i "s^$CHSTN^$HSTN^g" /etc/hostname
+sudo systemctl enable pppoe
+if [[ ! $HSTN == "pppwn" ]] ;then
+sudo sed -i "s^$HSTN^pppwn^g" /etc/hosts
+sudo sed -i "s^$HSTN^pppwn^g" /etc/hostname
+fi
 echo -e '\033[36mInstall complete,\033[33m Rebooting\033[0m'
 sudo reboot
